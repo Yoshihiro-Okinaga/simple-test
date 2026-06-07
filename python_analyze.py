@@ -8,7 +8,7 @@ from typing import Set
 @dataclass
 class ProjectExportConfig:
     """プロジェクト書き出し設定"""
-    project_path: str = "../stock_predict"
+    project_path: str = "../stock-predict"
     output_file: str = "./stock_predict_context.txt"
 
     # ここが設定されていたら、その拡張子のみ対象
@@ -18,7 +18,7 @@ class ProjectExportConfig:
 
     # 中身を出力する拡張子
     target_extensions: Set[str] = field(default_factory=lambda: {
-        ".py", ".toml", ".md", ".json", ".yaml", ".yml"
+        ".py", ".cs", ".toml", ".md", ".json", ".yaml", ".yml"
     })
 
     # 除外する拡張子（ツリー表示・内容出力の両方に適用）
@@ -158,23 +158,51 @@ if __name__ == "__main__":
     script_dir = Path(__file__).parent
 
     config = ProjectExportConfig(
-        project_path="../stock_predict",
-        output_file="./stock_predict_context.txt",
     )
 
     # 結果
     result_config = ProjectExportConfig(
-        project_path="../stock_predict_Results/Mac/results",
+        project_path="../stock_predict_Results/results",
         output_file="./result.txt",
         only_target_extensions={".csv"},
     )
 
     # 詳細版（json/yamlも含む）
     full_config = ProjectExportConfig(
-        project_path="../stock_predict",
+        project_path="../stock-predict",
         output_file="./stock_predict_context_full.txt",
         target_extensions={".py", ".toml", ".md", ".json", ".yaml", ".yml"},
     )
 
+    game_config = ProjectExportConfig(
+        project_path="../../HtmlProject/price-ride-viewer",
+        output_file="./price-ride-viewer_context.txt",
+        target_extensions={".html", ".js", ".css"},
+    )
+
+    stock_data_config = ProjectExportConfig(
+        project_path="../stock-data",
+        output_file="./stock_data_context.txt",
+        target_extensions={".py", ".toml", ".md", ".json", ".yaml", ".yml"},
+    )
+
+    html5_config = ProjectExportConfig(
+        project_path="../../HTML5",
+        output_file="./HTML5_context.txt",
+        target_extensions={".html", ".js", ".css"},
+    )
+
     exporter = ProjectContextExporter(base_dir=script_dir, config=config)
+    exporter.run()
+
+    exporter = ProjectContextExporter(base_dir=script_dir, config=result_config)
+    exporter.run()
+
+    exporter = ProjectContextExporter(base_dir=script_dir, config=game_config)
+    exporter.run()
+
+    exporter = ProjectContextExporter(base_dir=script_dir, config=stock_data_config)
+    exporter.run()
+
+    exporter = ProjectContextExporter(base_dir=script_dir, config=html5_config)
     exporter.run()
