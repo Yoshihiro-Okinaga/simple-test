@@ -1,4 +1,4 @@
-﻿import os
+import os
 from platformdirs import user_config_dir, user_data_dir, user_cache_dir
 from pathlib import Path
 

@@ -5,6 +5,89 @@ from pathlib import Path
 from typing import Set
 
 
+# ---------------------------
+# 書き出し設定
+# ---------------------------
+
+PROJECT_CONFIGS = [
+    {
+        "project_path": "../stock-predict",
+        "output_file": "./stock-predict_context.txt",
+    },
+]
+
+# 2. 下の4つで変化する「銘柄名」だけをリストにする
+symbols = ["US30_Futures", "EUR_USD", "USD_JPY", "GOLD_USD", "6752_パナソニック", "9501_東京電力ホールディングス"]
+
+# 3. ループで回して PROJECT_CONFIGS に追加する
+for symbol in symbols:
+    config = {
+        "project_path": f"../stock_predict_Results/develop/{symbol}/result",
+        "output_file": f"./stock_Result/{symbol}.txt",
+        "only_target_extensions": {".csv"},
+    }
+    PROJECT_CONFIGS.append(config)
+
+PROJECT_CONFIGS_ORG = [
+    {
+        "project_path": "../stock-predict",
+        "output_file": "./stock-predict_context.txt",
+    },
+    {
+        "project_path": "../stock_predict_Results/results",
+        "output_file": "./result.txt",
+        "only_target_extensions": {".csv"},
+    },
+    {
+        "project_path": "../../HtmlProject/price-ride-viewer",
+        "output_file": "./price-ride-viewer_context.txt",
+        "target_extensions": {".html", ".js", ".css"},
+    },
+    {
+        "project_path": "../stock-data",
+        "output_file": "./stock-data_context.txt",
+        "target_extensions": {
+            ".py", ".toml", ".md", ".json", ".yaml", ".yml"
+        },
+    },
+    {
+        "project_path": "../../HTML5",
+        "output_file": "./HTML5_context.txt",
+        "target_extensions": {".html", ".js", ".css"},
+    },
+]
+
+PROJECT_CONFIGS_STOCK = [
+    {
+        "project_path": "../../VCSProject/CSUtility",
+        "output_file": "./StockProgram/CSUtility.txt",
+    },
+    {
+        "project_path": "../../VCSProject/StockCalcForm",
+        "output_file": "./StockProgram/StockCalcForm.txt",
+    },
+    {
+        "project_path": "D:/Okinaga/Dropbox/StockRecord",
+        "output_file": "./StockProgram/StockRecord.txt",
+        "only_target_extensions": {".csv"},
+    },
+    {
+        "project_path": "D:/Okinaga/Dropbox/FXCFDData",
+        "output_file": "./StockProgram/FXCFDData.txt",
+        "only_target_extensions": {".csv"},
+    },
+    {
+        "project_path": "D:/Okinaga/PythonProject/stock-data/FXCFD",
+        "output_file": "./StockProgram/FXCFD.txt",
+        "only_target_extensions": {".csv"},
+    },
+    {
+        "project_path": "D:/Okinaga/PythonProject/stock-data/Stock",
+        "output_file": "./StockProgram/Stock.txt",
+        "only_target_extensions": {".csv"},
+    },
+]
+
 @dataclass
 class ProjectExportConfig:
     """プロジェクト書き出し設定"""
@@ -154,55 +237,18 @@ class ProjectContextExporter:
 # ---------------------------
 # 実行例（従来の main 相当）
 # ---------------------------
-if __name__ == "__main__":
+def main() -> None:
     script_dir = Path(__file__).parent
 
-    config = ProjectExportConfig(
-    )
+    for config_values in PROJECT_CONFIGS:
+        config = ProjectExportConfig(**config_values)
 
-    # 結果
-    result_config = ProjectExportConfig(
-        project_path="../stock_predict_Results/results",
-        output_file="./result.txt",
-        only_target_extensions={".csv"},
-    )
+        exporter = ProjectContextExporter(
+            base_dir=script_dir,
+            config=config,
+        )
+        exporter.run()
 
-    # 詳細版（json/yamlも含む）
-    full_config = ProjectExportConfig(
-        project_path="../stock-predict",
-        output_file="./stock_predict_context_full.txt",
-        target_extensions={".py", ".toml", ".md", ".json", ".yaml", ".yml"},
-    )
 
-    game_config = ProjectExportConfig(
-        project_path="../../HtmlProject/price-ride-viewer",
-        output_file="./price-ride-viewer_context.txt",
-        target_extensions={".html", ".js", ".css"},
-    )
-
-    stock_data_config = ProjectExportConfig(
-        project_path="../stock-data",
-        output_file="./stock_data_context.txt",
-        target_extensions={".py", ".toml", ".md", ".json", ".yaml", ".yml"},
-    )
-
-    html5_config = ProjectExportConfig(
-        project_path="../../HTML5",
-        output_file="./HTML5_context.txt",
-        target_extensions={".html", ".js", ".css"},
-    )
-
-    exporter = ProjectContextExporter(base_dir=script_dir, config=config)
-    exporter.run()
-
-    exporter = ProjectContextExporter(base_dir=script_dir, config=result_config)
-    exporter.run()
-
-    exporter = ProjectContextExporter(base_dir=script_dir, config=game_config)
-    exporter.run()
-
-    exporter = ProjectContextExporter(base_dir=script_dir, config=stock_data_config)
-    exporter.run()
-
-    exporter = ProjectContextExporter(base_dir=script_dir, config=html5_config)
-    exporter.run()
+if __name__ == "__main__":
+    main()
