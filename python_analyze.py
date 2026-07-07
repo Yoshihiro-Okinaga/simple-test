@@ -8,7 +8,6 @@ from typing import Set
 # ---------------------------
 # 書き出し設定
 # ---------------------------
-
 PROJECT_CONFIGS = [
     {
         "project_path": "../stock-predict",
@@ -17,22 +16,33 @@ PROJECT_CONFIGS = [
 ]
 
 # 2. 下の4つで変化する「銘柄名」だけをリストにする
-symbols = ["US30_Futures", "EUR_USD", "USD_JPY", "GOLD_USD", "6752_パナソニック", "9501_東京電力ホールディングス"]
+symbols = [
+#    "US30_Futures",
+    "EUR_USD",
+    "USD_JPY",
+#    "GOLD_USD",
+#    "6752_パナソニック",
+    "9501_東京電力ホールディングス",
+]
+
+develop_datas = [
+    #"result",
+    "classification_diagnostic",
+    "feature_importance",
+    "overfit_diagnostic",
+]
 
 # 3. ループで回して PROJECT_CONFIGS に追加する
 for symbol in symbols:
-    config = {
-        "project_path": f"../stock_predict_Results/develop/{symbol}/result",
-        "output_file": f"./stock_Result/{symbol}.txt",
-        "only_target_extensions": {".csv"},
-    }
-    PROJECT_CONFIGS.append(config)
+    for develop_data in develop_datas:
+        config = {
+            "project_path": f"../stock_predict_Results/develop/{symbol}/{develop_data}",
+            "output_file": f"./stock_Result/{symbol}_{develop_data}.txt",
+            "only_target_extensions": {".csv"},
+        }
+        #PROJECT_CONFIGS.append(config)
 
 PROJECT_CONFIGS_ORG = [
-    {
-        "project_path": "../stock-predict",
-        "output_file": "./stock-predict_context.txt",
-    },
     {
         "project_path": "../stock_predict_Results/results",
         "output_file": "./result.txt",
@@ -57,36 +67,35 @@ PROJECT_CONFIGS_ORG = [
     },
 ]
 
-PROJECT_CONFIGS_STOCK = [
+PROJECT_CONFIGS.extend(PROJECT_CONFIGS_ORG)
+
+PROJECT_CONFIGS_STOCK_PROGRAM = [
     {
         "project_path": "../../VCSProject/CSUtility",
-        "output_file": "./StockProgram/CSUtility.txt",
+        "output_file": "./CSUtility.txt",
     },
     {
         "project_path": "../../VCSProject/StockCalcForm",
-        "output_file": "./StockProgram/StockCalcForm.txt",
+        "output_file": "./StockCalcForm.txt",
     },
-    {
-        "project_path": "D:/Okinaga/Dropbox/StockRecord",
-        "output_file": "./StockProgram/StockRecord.txt",
-        "only_target_extensions": {".csv"},
-    },
-    {
-        "project_path": "D:/Okinaga/Dropbox/FXCFDData",
-        "output_file": "./StockProgram/FXCFDData.txt",
-        "only_target_extensions": {".csv"},
-    },
+]
+
+#PROJECT_CONFIGS.extend(PROJECT_CONFIGS_STOCK_PROGRAM)
+
+PROJECT_CONFIGS_STOCK_DATA = [
     {
         "project_path": "D:/Okinaga/PythonProject/stock-data/FXCFD",
-        "output_file": "./StockProgram/FXCFD.txt",
+        "output_file": "./FXCFD.txt",
         "only_target_extensions": {".csv"},
     },
     {
         "project_path": "D:/Okinaga/PythonProject/stock-data/Stock",
-        "output_file": "./StockProgram/Stock.txt",
+        "output_file": "./Stock.txt",
         "only_target_extensions": {".csv"},
     },
 ]
+
+PROJECT_CONFIGS.extend(PROJECT_CONFIGS_STOCK_DATA)
 
 @dataclass
 class ProjectExportConfig:
@@ -134,7 +143,8 @@ class ProjectContextExporter:
     # ---------- public API ----------
     def run(self) -> Path:
         """書き出し実行"""
-        self._validate_paths()
+        if not self._validate_paths():
+            return
 
         # 出力ファイル自身のファイル名は常に除外（project内にある場合の事故防止）
         ignore_files = set(self.config.ignore_files)
@@ -149,14 +159,17 @@ class ProjectContextExporter:
         return self.output_path
 
     # ---------- validation ----------
-    def _validate_paths(self) -> None:
+    def _validate_paths(self) -> bool:
         if not self.project_path.exists():
-            raise FileNotFoundError(f"プロジェクトパスが存在しません: {self.project_path}")
+            print(f"プロジェクトパスが存在しません: {self.project_path}")
+            return False
         if not self.project_path.is_dir():
-            raise NotADirectoryError(f"プロジェクトパスがディレクトリではありません: {self.project_path}")
+            print(f"プロジェクトパスがディレクトリではありません: {self.project_path}")
+            return False
 
         # 出力先ディレクトリを作成（必要なら）
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        return True
 
     # ---------- write sections ----------
     def _write_header(self, f) -> None:
