@@ -12,17 +12,25 @@ CSV_FOLDER = "./stock-data/FXCFD/"
 diff_day_list = range(1, 6)
 
 # lag_days（B銘柄を何日前にずらすか）を範囲指定
-# 例：1〜30日ずらす
-lag_day_list = range(1, 31)
+# 今回は偶然相関を減らすため、1〜10日までにする
+lag_day_list = range(1, 11)
+
+# True の場合、lag_days >= diff_days の組み合わせだけ計算する
+# これにより、同一銘柄で騰落期間が重なる組み合わせを避ける
+USE_ONLY_NON_OVERLAPPING_LAG = True
 
 # 並列数
 # 大きくしすぎるとメモリ使用量が増えるため、まずは4程度が無難。
 MAX_WORKERS = min(4, os.cpu_count() or 1)
 
+# 出力ファイル
+OUTPUT_TOP100_OVERALL = "top100_diff_lagged_correlation_overall.csv"
+OUTPUT_TOP20_CROSS_ASSET = "top20_cross_asset_correlation.csv"
+OUTPUT_TOP20_SELF_ASSET = "top20_self_asset_correlation.csv"
+
 
 def load_close_series_dict(csv_folder):
     """CSVフォルダから各銘柄の終値Seriesを読み込む。"""
-    # サブフォルダも含めて再帰的に CSV を検索
     csv_files = glob.glob(os.path.join(csv_folder, "**", "*.csv"), recursive=True)
 
     data_dict = {}
@@ -66,6 +74,21 @@ def make_diff_dict(data_dict, diff_days):
     return diff_dict
 
 
+def make_a_dataframe(diff_dict, names):
+    """
+    A側の騰落DataFrameを作る。
+
+    A側は lag_days が変わっても同じなので、
+    diff_days ごとに1回だけ作る。
+    """
+    a_df = pd.concat(diff_dict, axis=1, sort=True)
+
+    a_columns = [f"A__{name}" for name in names]
+    a_df.columns = a_columns
+
+    return a_df, a_columns
+
+
 def make_shifted_dict(diff_dict, lag_days):
     """
     B銘柄側の騰落を lag_days 日ずらす。
@@ -80,29 +103,38 @@ def make_shifted_dict(diff_dict, lag_days):
     return shifted_dict
 
 
-def calculate_lagged_correlation(diff_dict, shifted_dict, names,
-                                 diff_days, lag_days):
+def make_b_dataframe(shifted_dict, names):
+    """B側の騰落DataFrameを作る。"""
+    b_df = pd.concat(shifted_dict, axis=1, sort=True)
+
+    b_columns = [f"B__{name}" for name in names]
+    b_df.columns = b_columns
+
+    return b_df, b_columns
+
+
+def calculate_lagged_correlation(
+    a_df,
+    a_columns,
+    diff_dict,
+    names,
+    diff_days,
+    lag_days,
+):
     """
     Aの騰落と、lag_daysずらしたBの騰落の相関を一括計算する。
 
     元コードでは A, B のペアごとに pd.concat() と corr() を呼んでいた。
     ここでは全銘柄をDataFrameにまとめて、相関行列から A × B 部分だけを取り出す。
     """
-    a_df = pd.concat(diff_dict, axis=1, sort=True)
-    b_df = pd.concat(shifted_dict, axis=1, sort=True)
-
-    a_columns = [f"A__{name}" for name in names]
-    b_columns = [f"B__{name}" for name in names]
-
-    a_df.columns = a_columns
-    b_df.columns = b_columns
+    shifted_dict = make_shifted_dict(diff_dict, lag_days)
+    b_df, b_columns = make_b_dataframe(shifted_dict, names)
 
     combined_df = pd.concat([a_df, b_df], axis=1, sort=True)
 
     corr_matrix = combined_df.corr()
 
     corr_block = corr_matrix.loc[a_columns, b_columns]
-
     corr_values = corr_block.to_numpy()
 
     pair_count = len(names) * len(names)
@@ -120,23 +152,21 @@ def calculate_lagged_correlation(diff_dict, shifted_dict, names,
     return corr_df
 
 
-def calculate_one_lag_days(diff_dict, names, diff_days, lag_days):
+def get_lag_days_for_diff_days(diff_days):
     """
-    1つの lag_days に対する相関計算を行う。
+    diff_days に対して、実際に計算する lag_days 一覧を返す。
 
-    この関数を並列実行する。
+    USE_ONLY_NON_OVERLAPPING_LAG=True の場合、
+    lag_days >= diff_days のものだけを対象にする。
     """
-    shifted_dict = make_shifted_dict(diff_dict, lag_days)
+    if not USE_ONLY_NON_OVERLAPPING_LAG:
+        return list(lag_day_list)
 
-    corr_df = calculate_lagged_correlation(
-        diff_dict=diff_dict,
-        shifted_dict=shifted_dict,
-        names=names,
-        diff_days=diff_days,
-        lag_days=lag_days,
-    )
-
-    return corr_df
+    return [
+        lag_days
+        for lag_days in lag_day_list
+        if lag_days >= diff_days
+    ]
 
 
 def calculate_one_diff_days(data_dict, names, diff_days):
@@ -146,14 +176,21 @@ def calculate_one_diff_days(data_dict, names, diff_days):
     # diff_days 日騰落を計算
     diff_dict = make_diff_dict(data_dict, diff_days)
 
+    # A側は lag_days が変わっても同じなので、ここで1回だけ作る
+    a_df, a_columns = make_a_dataframe(diff_dict, names)
+
+    target_lag_day_list = get_lag_days_for_diff_days(diff_days)
+
     all_corr_df_list = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = []
 
-        for lag_days in lag_day_list:
+        for lag_days in target_lag_day_list:
             future = executor.submit(
-                calculate_one_lag_days,
+                calculate_lagged_correlation,
+                a_df,
+                a_columns,
                 diff_dict,
                 names,
                 diff_days,
@@ -161,14 +198,62 @@ def calculate_one_diff_days(data_dict, names, diff_days):
             )
             futures.append(future)
 
-        # futures は lag_day_list の順番で入っている。
-        # ここで同じ順番で result() を取り出すことで、
-        # 元コードに近い順序を維持する。
+        # futures は target_lag_day_list の順番で入っている。
+        # 同じ順番で result() を取り出すことで、元コードに近い順序を維持する。
         for future in futures:
             corr_df = future.result()
             all_corr_df_list.append(corr_df)
 
     return all_corr_df_list
+
+
+def save_ranking_files(all_corr_df):
+    """
+    ランキングを用途別に保存する。
+
+    1. 全体トップ100
+    2. 他銘柄ペア A != B のトップ20
+    3. 自己ペア A == B のトップ20
+    """
+    ranked_df = all_corr_df.sort_values("abs_corr", ascending=False)
+
+    top100_overall = ranked_df.head(100)
+
+    cross_asset_df = ranked_df[ranked_df["A"] != ranked_df["B"]]
+    self_asset_df = ranked_df[ranked_df["A"] == ranked_df["B"]]
+
+    top20_cross_asset = cross_asset_df.head(20)
+    top20_self_asset = self_asset_df.head(20)
+
+    print("=== 全体トップ100のうち上位20 ===")
+    print(top100_overall.head(20))
+
+    print()
+    print("=== 他銘柄トップ20（A != B） ===")
+    print(top20_cross_asset)
+
+    print()
+    print("=== 自己ペアトップ20（A == B） ===")
+    print(top20_self_asset)
+
+    # BOMなし UTF-8 で保存
+    top100_overall.to_csv(
+        OUTPUT_TOP100_OVERALL,
+        encoding="utf-8",
+        index=False,
+    )
+
+    top20_cross_asset.to_csv(
+        OUTPUT_TOP20_CROSS_ASSET,
+        encoding="utf-8",
+        index=False,
+    )
+
+    top20_self_asset.to_csv(
+        OUTPUT_TOP20_SELF_ASSET,
+        encoding="utf-8",
+        index=False,
+    )
 
 
 def main():
@@ -177,14 +262,21 @@ def main():
     # 銘柄名一覧
     names = list(data_dict.keys())
 
+    print(f"銘柄数: {len(names)}")
+    print(f"並列数: {MAX_WORKERS}")
+    print(f"lag_days >= diff_days のみ: {USE_ONLY_NON_OVERLAPPING_LAG}")
+    print(f"lag_days 範囲: {list(lag_day_list)}")
+
     # 全 diff_days × lag_days の結果をまとめるリスト
     all_corr_df_list = []
 
-    print(f"銘柄数: {len(names)}")
-    print(f"並列数: {MAX_WORKERS}")
-
     for diff_days in diff_day_list:
-        print(f"diff_days = {diff_days} を計算中...")
+        target_lag_day_list = get_lag_days_for_diff_days(diff_days)
+
+        print(
+            f"diff_days = {diff_days} を計算中..."
+            f" lag_days = {list(target_lag_day_list)}"
+        )
 
         corr_df_list = calculate_one_diff_days(
             data_dict=data_dict,
@@ -197,18 +289,7 @@ def main():
     # DataFrame化
     all_corr_df = pd.concat(all_corr_df_list, ignore_index=True)
 
-    # 総合トップ20（diff_days × lag_days の総合ランキング）
-    top20 = all_corr_df.sort_values("abs_corr", ascending=False).head(20)
-
-    print("=== 総合トップ20（騰落 × ラグ相関） ===")
-    print(top20)
-
-    # BOMなし UTF-8 で保存
-    top20.to_csv(
-        "top20_diff_lagged_correlation_overall.csv",
-        encoding="utf-8",
-        index=False,
-    )
+    save_ranking_files(all_corr_df)
 
 
 if __name__ == "__main__":
