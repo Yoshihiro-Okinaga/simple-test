@@ -84,12 +84,12 @@ PROJECT_CONFIGS_STOCK_PROGRAM = [
 
 PROJECT_CONFIGS_STOCK_DATA = [
     {
-        "project_path": "D:/Okinaga/PythonProject/stock-data/FXCFD",
+        "project_path": "D:/Okinaga/PythonProject/stock-data/Manual/FXCFD",
         "output_file": "./FXCFD.txt",
         "only_target_extensions": {".csv"},
     },
     {
-        "project_path": "D:/Okinaga/PythonProject/stock-data/Stock",
+        "project_path": "D:/Okinaga/PythonProject/stock-data/Manual/Stock",
         "output_file": "./Stock.txt",
         "only_target_extensions": {".csv"},
     },
